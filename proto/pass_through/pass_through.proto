@@ -1,0 +1,20 @@
+syntax = "proto3";
+package pass_through;
+import "google/protobuf/timestamp.proto";
+
+// protoc -I=.\proto -I=D:\protoc\include\ --go_out=plugins=grpc:.\proto .\proto\pas
+//s_through\pass_through.proto
+
+// 建立转发链接
+message PassThroughConnection {
+    enum StatusCode{
+        TASK_WAITING = 0;
+        TASK_RUNNING = 1;
+        TASK_OVER = 2;
+    }
+
+    string grpc_srv_id = 1;
+    string grpc_client_id = 2;
+    google.protobuf.Timestamp create_time = 3;
+    int32 status =4;
+}
