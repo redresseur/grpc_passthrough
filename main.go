@@ -21,12 +21,12 @@ import (
 func main()  {
 	var(
 		ptAddr = net.TCPAddr{
-			IP: net.IPv4(192, 168, 1, 160),
+			IP: net.IPv4(127, 0, 0, 1),
 			Port: 9082,
 		}
 
 		bridgeAddr = net.TCPAddr{
-			IP: net.IPv4(192, 168, 1, 160),
+			IP: net.IPv4(127, 0, 0, 1),
 			Port: 9081,
 		}
 

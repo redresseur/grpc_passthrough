@@ -1,3 +1,5 @@
 .vscode
 .idea
 go.sum
+main
+main.exe

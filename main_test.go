@@ -24,12 +24,12 @@ var(
 	once = sync.Once{}
 	ptAddr = net.TCPAddr{
 		//IP: net.IPv4(127, 0, 0, 1),
-		IP: net.IPv4(192, 168, 1, 160),
+		IP: net.IPv4(127, 0, 0, 1),
 		Port: 9082,
 	}
 
 	bridgeAddr = net.TCPAddr{
-		IP: net.IPv4(192, 168, 1, 160),
+		IP: net.IPv4(127, 0, 0, 1),
 		Port: 9081,
 	}
 
@@ -114,14 +114,15 @@ func TestCollection(t *testing.T)  {
 	helloClient := hello.NewGreeterClient(grpcClient)
 
 	for i:=0 ; i < 10000; i++{
-		rsp, err :=helloClient.SayHello(context.Background(), &hello.HelloRequest{
+		ctx, _ := context.WithTimeout(context.Background(), common.WRITE_TIMEOUT)
+		rsp, err :=helloClient.SayHello(ctx, &hello.HelloRequest{
 			Name:"ok, 阿拉嗦",
 		})
 
 		if err != nil{
-			t.Fatalf("SayHello %v", err)
+			t.Fatalf("SayHello %d %v", i, err)
 		}else {
-			t.Logf("Hello Reply %s", rsp.Message)
+			t.Logf("Hello Reply %d %s", i, rsp.Message)
 		}
 
 		time.Sleep(20 * time.Millisecond)
@@ -241,67 +242,21 @@ func BenchmarkCollection(b *testing.B)  {
 
 }
 
-//
-//func Benchmark_Main(b *testing.B)  {
-//	once.Do(initTest)
-//	srv := grpc.NewServer()
-//	_proto.RegisterGreeterServer(srv ,&impl.GreaterSrv{})
-//
-//	pttl := impl.NewTcpListener(&addr, context.Background())
-//
-//	go srv.Serve(pttl)
-//
-//	var grpcClientID, grpcSrvID string
-//	var grpcClient _proto.GreeterClient
-//
-//	// grpc 服务端连接透传服务器
-//	if srvConn, err := net.DialTCP(addr.Network(), nil, &addr); err !=nil{
-//		panic(err)
-//	}else {
-//		id := make([]byte, 64)
-//		if len, err := srvConn.Read(id); err != nil{
-//			panic(err)
-//		}else {
-//			grpcSrvID = string(id[:len])
-//		}
-//
-//		pttl.Deliver(srvConn)
-//	}
-//
-//	//time.Sleep(3*time.Second)
-//	// grpc 客户端连接透传服务器
-//	dialer := func(context.Context, string) (net.Conn, error){
-//		conn, err := net.Dial(addr.Network(), addr.String())
-//
-//		if err !=nil{
-//			return nil, err
-//		}
-//		id := make([]byte, 64)
-//		if len, err := conn.Read(id); err != nil{
-//			return nil, err
-//		}else {
-//			grpcClientID = string(id[:len])
-//		}
-//
-//		if err := ptsrv.Bridge(grpcClientID, grpcSrvID); err != nil{
-//			return nil, err
-//		}
-//		return  conn, nil
-//	}
-//	cc, err := grpc.Dial( `grpc://` + addr.String(), grpc.WithInsecure(), grpc.WithContextDialer(dialer))
-//	if err != nil{
-//		b.Fatalf("connect %v", err)
-//	}
-//	grpcClient = _proto.NewGreeterClient(cc)
-//
-//	// time.Sleep(1*time.Second)
-//	for i := 0; i< b.N; i++{
-//		_, err := grpcClient.SayHello(context.Background(),
-//			&_proto.HelloRequest{Name: fmt.Sprintf("%s_%d", grpcClientID, i),})
-//		if err != nil{
-//			b.Fatalf("say hello %v", err)
-//		}
-//		//b.Log(resp.Message)
-//	}
-//
-//}
+func TestIpv4(t *testing.T){
+	conn, err := net.ListenIP("ip:tcp", &net.IPAddr{IP: net.IPv4(127,0,0,1)})
+	if err != nil{
+		t.Fatalf("ListenIP %v", err)
+	}
+	go func() {
+		net.DialTCP("tcp", nil, &net.TCPAddr{
+			IP: net.IPv4(127, 0, 0, 1),
+			Port: 9081,
+		})
+	}()
+	for  {
+		data := make([]byte, common.MTU)
+		if readLen, err := conn.Read(data); err != nil{
+			t.Logf("ip read <%d, %v>", readLen, data[:readLen])
+		}
+	}
+}

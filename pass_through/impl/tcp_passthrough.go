@@ -239,18 +239,18 @@ func (t *TcpPassThroughSrv)Bridge(conn *ppass_through.PassThroughConnection) err
 		return err
 	}
 
-	if err := srvTcpC.SetReadBuffer(0); err != nil{
-		return err
-	}
+	//if err := srvTcpC.SetReadBuffer(0); err != nil{
+	//	return err
+	//}
 
 	clientTcpC := grpcClientConn.(*net.TCPConn)
 	if err := clientTcpC.SetWriteBuffer(0); err != nil{
 		return err
 	}
 
-	if err := clientTcpC.SetReadBuffer(0); err != nil{
-		return err
-	}
+	//if err := clientTcpC.SetReadBuffer(0); err != nil{
+	//	return err
+	//}
 
 	beRunning := make(chan struct{}, 2)
 	defer close(beRunning)
