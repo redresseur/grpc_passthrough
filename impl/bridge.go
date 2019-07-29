@@ -227,8 +227,6 @@ func (b *Bridge)Listener(req *bridge.ListenerRequest, srv bridge.Bridge_Listener
 			if err := srv.Send(c); err != nil{
 				return err
 			}
-		default:
-
 		}
 	}
 

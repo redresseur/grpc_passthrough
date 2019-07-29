@@ -3,19 +3,19 @@ package main
 import (
 	"code.speakin.mobi/identify/remote_desktop_multi/passthrough.git/impl"
 	"code.speakin.mobi/identify/remote_desktop_multi/passthrough.git/impl/event"
-	"code.speakin.mobi/identify/remote_desktop_multi/passthrough.git/pass_through"
-	"code.speakin.mobi/identify/remote_desktop_multi/passthrough.git/proto/bridge"
-	//"code.speakin.mobi/identify/remote_desktop_multi/passthrough.git/proto/hello"
-	//"code.speakin.mobi/identify/remote_desktop_multi/passthrough.git/sdk/server"
-	ptimpl "code.speakin.mobi/identify/remote_desktop_multi/passthrough.git/pass_through/impl"
 	eimpl "code.speakin.mobi/identify/remote_desktop_multi/passthrough.git/impl/event/impl"
-	//"context"
-
+	"code.speakin.mobi/identify/remote_desktop_multi/passthrough.git/pass_through"
+	ptimpl "code.speakin.mobi/identify/remote_desktop_multi/passthrough.git/pass_through/impl"
+	"code.speakin.mobi/identify/remote_desktop_multi/passthrough.git/proto/bridge"
+	"context"
 	"fmt"
+	"github.com/redresseur/utils"
+	"github.com/redresseur/utils/ioutils"
 	"google.golang.org/grpc"
 	"net"
+	"os"
+	"runtime/pprof"
 )
-
 
 
 func main()  {
@@ -38,6 +38,20 @@ func main()  {
 		// csync = make(chan struct {})
 	)
 
+	os.RemoveAll("cpu.profile")
+	fs, err := ioutils.OpenFile("cpu.profile","")
+	if err != nil{
+		panic(err)
+	}else {
+		// defer fs.Close()
+	}
+
+	if err := pprof.StartCPUProfile(fs); err != nil{
+		panic(err)
+	}else {
+		// defer
+	}
+
 	// 启动透传服务
 	em := event.NewManager()
 	em.RegistryService(bridge.EventRequest_SERVICE_EVENT, eimpl.NewTcpServiceEventService())
@@ -56,5 +70,17 @@ func main()  {
 		panic(fmt.Sprintf("Create bridge server's listener: %v", err))
 	}
 
-	srv.Serve(l)
+	go srv.Serve(l)
+	utils.WatchSignal(map[os.Signal]func(){
+		os.Interrupt: func() {
+			pprof.StopCPUProfile()
+			fs.Close()
+			os.Exit(1)
+		},
+		os.Kill : func() {
+			pprof.StopCPUProfile()
+			fs.Close()
+			os.Exit(1)
+		},
+	}, context.Background())
 }
