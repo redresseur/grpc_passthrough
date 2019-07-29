@@ -75,17 +75,25 @@ func TestTcpPassThroughSrv_Listener(t *testing.T) {
 		dstConn.Write(data)
 	}
 
-	go srcConn.Write([]byte(http2.ClientPreface))
-	data := make([]byte, len(http2.ClientPreface))
-	dstConn.Read(data)
-	t.Logf("read the data: %s ", string(data))
+	messageNum := 10000
+	go func() {
+		for i:= 0; i < messageNum; i++{
+			go srcConn.Write([]byte(http2.ClientPreface))
+			data := make([]byte, len(http2.ClientPreface))
+			dstConn.Read(data)
+			t.Logf("read the data: %s ", string(data))
 
-	go dstConn.Write([]byte(http2.ClientPreface))
-	data = make([]byte, len(http2.ClientPreface))
-	if _, err := io.ReadFull(srcConn, data); err != nil{
-		t.Fatalf("read the data error %v", err)
-	}else {
-		t.Logf("read the data: %s ", string(data))
+		}
+	}()
+
+	for i:= 0; i < messageNum; i++{
+		go dstConn.Write([]byte(http2.ClientPreface))
+		data := make([]byte, len(http2.ClientPreface))
+		if _, err := io.ReadFull(srcConn, data); err != nil{
+			t.Fatalf("read the data error %v", err)
+		}else {
+			t.Logf("read the data: %s ", string(data))
+		}
 	}
 }
 

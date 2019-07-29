@@ -9,5 +9,5 @@ var (
 	WRITE_TIMEOUT = 10*time.Second
 	READ_TIMEOUT = 10*time.Second
 
-	KEEP_ALIVE_DURATION = 50*time.Millisecond
+	KEEP_ALIVE_DURATION = 3000*time.Millisecond
 )

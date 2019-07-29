@@ -17,7 +17,6 @@ import (
 	"net"
 	"sync"
 	"testing"
-	"time"
 )
 
 var(
@@ -115,6 +114,7 @@ func TestCollection(t *testing.T)  {
 
 	for i:=0 ; i < 10000; i++{
 		ctx, _ := context.WithTimeout(context.Background(), common.WRITE_TIMEOUT)
+		//ctx := context.Background()
 		rsp, err :=helloClient.SayHello(ctx, &hello.HelloRequest{
 			Name:"ok, 阿拉嗦",
 		})
@@ -125,7 +125,7 @@ func TestCollection(t *testing.T)  {
 			t.Logf("Hello Reply %d %s", i, rsp.Message)
 		}
 
-		time.Sleep(20 * time.Millisecond)
+		//time.Sleep(20 * time.Millisecond)
 	}
 
 }
@@ -164,7 +164,7 @@ func TestCollections(t *testing.T)  {
 
 	<- csync
 
-	connNums := 1
+	connNums := 10
 	over := make(chan bool, connNums)
 	for i := 0; i < connNums ; i ++{
 		go func() {
@@ -186,7 +186,7 @@ func TestCollections(t *testing.T)  {
 
 			helloClient := hello.NewGreeterClient(grpcClient)
 
-			for i:=0 ; i < 10000; i++{
+			for i:=0 ; i < 1000; i++{
 				ctx, _ := context.WithTimeout(context.Background(), common.WRITE_TIMEOUT)
 				rsp, err :=helloClient.SayHello(ctx, &hello.HelloRequest{
 					Name:"ok, 阿拉嗦",
@@ -197,7 +197,7 @@ func TestCollections(t *testing.T)  {
 				}else {
 					t.Logf("Hello Reply [%d] %s", i,  rsp.Message)
 				}
-				time.Sleep(20 * time.Millisecond)
+				//time.Sleep(20 * time.Millisecond)
 			}
 		}()
 	}
@@ -210,7 +210,7 @@ func TestCollections(t *testing.T)  {
 
 
 func BenchmarkCollection(b *testing.B)  {
-	once.Do(initTest)
+	once.Do(initTest2)
 	<- csync
 	// 启动 grpc  hello客户端
 	client_, err := grpc.Dial(fmt.Sprintf("%s", bridgeAddr.String()), grpc.WithInsecure())
@@ -228,7 +228,7 @@ func BenchmarkCollection(b *testing.B)  {
 
 	helloClient := hello.NewGreeterClient(grpcClient)
 
-	for i := 0; i < 1; i++ {
+	for i := 0; i < b.N; i++ {
 		rsp, err :=helloClient.SayHello(context.Background(), &hello.HelloRequest{
 			Name:"ok, 阿拉嗦",
 		})

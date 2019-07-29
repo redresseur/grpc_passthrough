@@ -199,10 +199,10 @@ func (t *TcpPassThroughSrv)bind(id string, conn net.Conn)error{
 	t.connWaitingSets.Store(id, conn)
 
 	// 开启心跳
-	//if tc, ok := conn.(*net.TCPConn); ok {
-	//	tc.SetKeepAlivePeriod(common.KEEP_ALIVE_DURATION)
-	//	tc.SetKeepAlive(true)
-	//}
+	if tc, ok := conn.(*net.TCPConn); ok {
+		tc.SetKeepAlivePeriod(common.KEEP_ALIVE_DURATION)
+		tc.SetKeepAlive(true)
+	}
 
 	return nil
 }
@@ -239,24 +239,20 @@ func (t *TcpPassThroughSrv)Bridge(conn *ppass_through.PassThroughConnection) err
 		return err
 	}
 
-	//if err := srvTcpC.SetReadBuffer(0); err != nil{
-	//	return err
-	//}
-
 	clientTcpC := grpcClientConn.(*net.TCPConn)
 	if err := clientTcpC.SetWriteBuffer(0); err != nil{
 		return err
 	}
 
-	//if err := clientTcpC.SetReadBuffer(0); err != nil{
-	//	return err
-	//}
-
 	beRunning := make(chan struct{}, 2)
 	defer close(beRunning)
-	redirect := func(dstID, srcID string, dstC, srcC *net.TCPConn)error {
+
+	srcChan :=  make(chan []byte, 1024)
+	dstChan := make(chan []byte, 1024)
+
+	redirect := func(dstID, srcID string, in, out chan []byte, srcC *net.TCPConn)error {
 		defer func() {
-			t.removeRunningConn(dstID)
+			//t.removeRunningConn(dstID)
 			t.removeRunningConn(srcID)
 			atomic.StoreInt32(&conn.Status, int32(ppass_through.PassThroughConnection_TASK_OVER))
 			data, _ := proto.Marshal(conn)
@@ -270,6 +266,47 @@ func (t *TcpPassThroughSrv)Bridge(conn *ppass_through.PassThroughConnection) err
 		
 		writeSum := 0
 		readSum := 0
+
+		// 启动读协程
+		go func() error {
+			for {
+				select {
+				case data, ok := <-in:
+					{
+						if !ok {
+							return nil
+						}
+
+						if err := srcC.SetWriteDeadline(time.Now().Add(common.WRITE_TIMEOUT/2)); err != nil{
+							return err
+						}
+
+						writtenLen, err := srcC.Write(data)
+						if err != nil{
+							// 超时就跳过，数据丢弃掉
+							if opErr, ok := err.(*net.OpError); ok{
+								if opErr.Timeout(){
+									logger.Infof("write to [%s] time out, continue", dstID)
+									//srcC.Write([]byte{})
+									continue
+								}
+							}
+							logger.Errorf("write to [%s] error: [%v]", dstID, err)
+							return err
+						}
+
+						if len(data) != writtenLen{
+							logger.Warningf("from [%s] to [%s]： the write and read not unique", dstID, srcID)
+						}else {
+							writeSum += writtenLen
+							logger.Debugf("from [%s] to [%s]： data length: [%d] data [%v], sum write data length [%d]",
+								dstID, srcID, len(data), data ,writeSum)
+						}
+
+					}
+				}
+			}
+		}()
 
 		for {
 			if err := srcC.SetReadDeadline(time.Now().Add(common.READ_TIMEOUT/2)); err != nil{
@@ -291,42 +328,20 @@ func (t *TcpPassThroughSrv)Bridge(conn *ppass_through.PassThroughConnection) err
 				return err
 			}
 
-			if err := dstC.SetWriteDeadline(time.Now().Add(common.WRITE_TIMEOUT/2)); err != nil{
-				return err
-			}
-
-			writtenLen, err := dstC.Write(data[:readLen])
-			if err != nil{
-				// 超时就跳过，数据丢弃掉
-				if opErr, ok := err.(*net.OpError); ok{
-					if opErr.Timeout(){
-						logger.Infof("write to [%s] time out, continue", dstID)
-						//srcC.Write([]byte{})
-						continue
-					}
-				}
-				logger.Errorf("write to [%s] error: [%v]", dstID, err)
-				return err
-			}
-
-			if readLen != writtenLen{
-				logger.Warningf("from [%s] to [%s]： the write and read not unique",  srcID, dstID)
-			}else {
-				writeSum += writtenLen
-				readSum += readLen
-				logger.Debugf("from [%s] to [%s]： data length: [%d] data [%v], sum write data length [%d] and sum read data length [%d]",
-					srcID, dstID, readLen, data[:readLen], writeSum, readSum)
-			}
+			readSum += readLen
+			logger.Debugf("from [%s] to [%s]： data length: [%d] data [%v], sum read data length [%d]",
+				 srcID, dstID, readLen, data[:readLen] ,readSum)
+			out <- data[:readLen]
 
 		}
 		return nil
 	}
 
 	// 请求转发
-	go redirect(serverConnID, clientConnID, srvTcpC, clientTcpC)
+	go redirect(serverConnID, clientConnID, srcChan, dstChan ,srvTcpC)
 
 	//应答转发
-	go redirect(clientConnID, serverConnID, clientTcpC, srvTcpC)
+	go redirect(clientConnID, serverConnID, dstChan, srcChan, clientTcpC)
 
 	<- beRunning
 	<- beRunning
