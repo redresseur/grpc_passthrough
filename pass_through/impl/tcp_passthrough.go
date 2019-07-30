@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"github.com/golang/protobuf/proto"
 	"github.com/op/go-logging"
+	"github.com/redresseur/utils/sturcture"
 	"log"
 	"sync/atomic"
 	"time"
@@ -247,10 +248,10 @@ func (t *TcpPassThroughSrv)Bridge(conn *ppass_through.PassThroughConnection) err
 	beRunning := make(chan struct{}, 2)
 	defer close(beRunning)
 
-	srcChan :=  make(chan []byte, 1024)
-	dstChan := make(chan []byte, 1024)
+	srcChan :=  structure.NewQueue(1)
+	dstChan := structure.NewQueue(1)
 
-	redirect := func(dstID, srcID string, in, out chan []byte, srcC *net.TCPConn)error {
+	redirect := func(dstID, srcID string, in, out *structure.Queue, srcC *net.TCPConn)error {
 		defer func() {
 			//t.removeRunningConn(dstID)
 			t.removeRunningConn(srcID)
@@ -271,38 +272,45 @@ func (t *TcpPassThroughSrv)Bridge(conn *ppass_through.PassThroughConnection) err
 		go func() error {
 			for {
 				select {
-				case data, ok := <-in:
+				case _, ok := <-in.Single():
 					{
 						if !ok {
 							return nil
 						}
 
-						if err := srcC.SetWriteDeadline(time.Now().Add(common.WRITE_TIMEOUT/2)); err != nil{
-							return err
-						}
-
-						writtenLen, err := srcC.Write(data)
-						if err != nil{
-							// 超时就跳过，数据丢弃掉
-							if opErr, ok := err.(*net.OpError); ok{
-								if opErr.Timeout(){
-									logger.Infof("write to [%s] time out, continue", dstID)
-									//srcC.Write([]byte{})
-									continue
-								}
+						for {
+							data := in.Pop()
+							if data == nil{
+								break
 							}
-							logger.Errorf("write to [%s] error: [%v]", dstID, err)
-							return err
+							if err := srcC.SetWriteDeadline(time.Now().Add(common.WRITE_TIMEOUT/2)); err != nil{
+								return err
+							}
+
+							writtenLen, err := srcC.Write(data.([]byte))
+							if err != nil{
+								// 超时就跳过，数据丢弃掉
+								if opErr, ok := err.(*net.OpError); ok{
+									if opErr.Timeout(){
+										logger.Infof("write to [%s] time out, continue", dstID)
+										//srcC.Write([]byte{})
+										continue
+									}
+								}
+								logger.Errorf("write to [%s] error: [%v]", dstID, err)
+								return err
+							}
+
+							if len(data.([]byte)) != writtenLen{
+								//logger.Warningf("from [%s] to [%s]： the write and read not unique", dstID, srcID)
+							}else {
+								writeSum += writtenLen
+								//logger.Debugf("from [%s] to [%s]： data length: [%d] data [%v], sum write data length [%d]",
+								//	dstID, srcID, len(data.([]byte)), data ,writeSum)
+							}
 						}
 
-						if len(data) != writtenLen{
-							logger.Warningf("from [%s] to [%s]： the write and read not unique", dstID, srcID)
-						}else {
-							writeSum += writtenLen
-							logger.Debugf("from [%s] to [%s]： data length: [%d] data [%v], sum write data length [%d]",
-								dstID, srcID, len(data), data ,writeSum)
-						}
-
+						in.SingleDown()
 					}
 				}
 			}
@@ -329,10 +337,11 @@ func (t *TcpPassThroughSrv)Bridge(conn *ppass_through.PassThroughConnection) err
 			}
 
 			readSum += readLen
-			logger.Debugf("from [%s] to [%s]： data length: [%d] data [%v], sum read data length [%d]",
-				 srcID, dstID, readLen, data[:readLen] ,readSum)
-			out <- data[:readLen]
+			//logger.Debugf("from [%s] to [%s]： data length: [%d] data [%v], sum read data length [%d]",
+			//	 srcID, dstID, readLen, data[:readLen] ,readSum)
 
+			out.Push(data[:readLen])
+			out.SingleUP(false)
 		}
 		return nil
 	}
