@@ -99,7 +99,9 @@ func TestCollection(t *testing.T)  {
 
 	<- csync
 	// 启动 grpc  hello客户端
-	client_, err := grpc.Dial(fmt.Sprintf("%s", bridgeAddr.String()), grpc.WithInsecure())
+	client_, err := grpc.Dial(fmt.Sprintf("%s", bridgeAddr.String()),
+		grpc.WithBlock(), grpc.WithInsecure())
+
 	if err != nil{
 		t.Fatalf("Dial bridge server's listener: %v", err)
 	}
@@ -132,7 +134,9 @@ func TestCollection(t *testing.T)  {
 
 func initTest2()  {
 	go func(){
-		bclient, err := grpc.Dial(fmt.Sprintf("%s", bridgeAddr.String()), grpc.WithInsecure())
+		bclient, err := grpc.Dial(fmt.Sprintf("%s", bridgeAddr.String()),
+			grpc.WithInsecure(),
+			grpc.WithBlock())
 		if err != nil {
 			panic(fmt.Sprintf("Dial bridge server's listener: %v", err))
 		}
@@ -173,7 +177,10 @@ func TestCollections(t *testing.T)  {
 				over <- true
 			}()
 
-			client_, err := grpc.Dial(fmt.Sprintf("%s", bridgeAddr.String()), grpc.WithInsecure())
+			client_, err := grpc.Dial(fmt.Sprintf("%s", bridgeAddr.String()),
+				grpc.WithBlock(),
+				grpc.WithInsecure())
+
 			if err != nil{
 				t.Fatalf("Dial bridge server's listener: %v", err)
 			}
